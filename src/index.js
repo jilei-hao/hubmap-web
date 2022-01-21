@@ -10,7 +10,8 @@ import '@kitware/vtk.js/Rendering/Profiles/Geometry';
 
 import vtkPolyDataReader from '@kitware/vtk.js/IO/Legacy/PolyDataReader';
 import vtkFullScreenRenderWindow from '@kitware/vtk.js/Rendering/Misc/FullScreenRenderWindow';
-
+import vtkLabelWidget from '@kitware/vtk.js/Interaction/Widgets/LabelWidget';
+import TextAlign from '@kitware/vtk.js/Interaction/Widgets/LabelRepresentation/Constants';
 import vtkActor from '@kitware/vtk.js/Rendering/Core/Actor';
 import vtkMapper from '@kitware/vtk.js/Rendering/Core/Mapper';
 import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
@@ -53,13 +54,13 @@ function createLine(p1, p2) {
 }
 
 // set axes start and end points
-const a = 50;
+const a = 30;
 const pSuperior = [0, a, 0];
 const pInferior = [0, -a, 0];
-const pLateral = [-a, 0, 0];
-const pMedial = [a, 0, 0];
-const pAnterior = [0, 0, -a];
-const pPosterior = [0, 0, a];
+const pLateral = [0, 0, -a];
+const pMedial = [0, 0, a];
+const pAnterior = [-a, 0, 0];
+const pPosterior = [a, 0, 0];
 
 // Create an array of 3 axes
 const axes = [
@@ -67,6 +68,28 @@ const axes = [
   createLine(pLateral, pMedial),
   createLine(pAnterior, pPosterior)
 ];
+
+// Create orientation text
+function createLabel(text, position) {
+  const widget = vtkLabelWidget.newInstance();
+  widget.setInteractor(renderWindow.getInteractor());
+  widget.setEnabled(1);
+  widget.setDragable(false);
+  widget.getWidgetRep().setLabelText(text);
+  widget.getWidgetRep().setWorldPosition(position);
+
+  return widget;
+}
+
+const lblS = createLabel('S', pSuperior);
+const lblI = createLabel('I', pInferior);
+const lblL = createLabel('L', pLateral);
+const lblM = createLabel('M', pMedial);
+const lblA = createLabel('A', pAnterior);
+const lblP = createLabel('P', pPosterior);
+
+global.lblS = lblS;
+
 
 
 // ----------------------------------------------------------------------------
