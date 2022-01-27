@@ -1,10 +1,12 @@
 /*
-  ==========================================================
+  ==========================================================================================
     HuBMAP Web
     v1.0
-
-  ==========================================================
+    
+  ==========================================================================================
 */
+
+import './main.css'
 
 import '@kitware/vtk.js/Rendering/Profiles/Geometry';
 
@@ -18,6 +20,14 @@ import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
 import vtkSTLWriter from '@kitware/vtk.js/IO/Geometry/STLWriter';
 import vtkLineSource from '@kitware/vtk.js/Filters/Sources/LineSource';
 import vtkWindowedSincPolyDataFilter from '@kitware/vtk.js/Filters/General/WindowedSincPolyDataFilter'
+import vtkHttpDataSetReader from '@kitware/vtk.js/IO/Core/HttpDataSetReader';
+import vtkXMLPolyDataReader from '@kitware/vtk.js/IO/XML/XMLPolyDataReader';
+
+// Force DataAccessHelper to have access to various data source
+import '@kitware/vtk.js/IO/Core/DataAccessHelper/HtmlDataAccessHelper';
+import '@kitware/vtk.js/IO/Core/DataAccessHelper/HttpDataAccessHelper';
+import '@kitware/vtk.js/IO/Core/DataAccessHelper/JSZipDataAccessHelper';
+
 import { Representation } from '@kitware/vtk.js/Rendering/Core/Property/Constants';
 
 // ----------------------------------------------------------------------------
@@ -96,20 +106,23 @@ global.lblS = lblS;
 // Get input from the server
 // ----------------------------------------------------------------------------
 const reader = vtkPolyDataReader.newInstance();
+const vtpReader = vtkXMLPolyDataReader.newInstance();
 
 // url of the file server, should be in a configuration file
 //const server_url = 'http://192.168.4.23:3000/index.js?ns=2&nr=4&d=20&h=30&w=40';
 //const file_name = 'Ovary.vtk';
 
 // connect the rendering pipeline
+/*
 const smoothFilter = vtkWindowedSincPolyDataFilter.newInstance({
   nonManifoldSmoothing: 0,
   numberOfIterations: 20,
   passBand: 0.001,
 });
-smoothFilter.setInputConnection(reader.getOutputPort());
+smoothFilter.setInputConnection(vtpReader.getOutputPort());
+*/
 
-polyMapper.setInputConnection(smoothFilter.getOutputPort());
+polyMapper.setInputConnection(vtpReader.getOutputPort());
 polyActor.setMapper(polyMapper);
 renderer.addActor(polyActor);
 renderer.resetCamera();
@@ -143,7 +156,11 @@ const controlPanel = `<table>
         </label>
       </td>
       <td>
-        <input type="number" id="ns" value=2>
+      <select id="ns" style="width: 100%">
+        <option value="1" selected>1</option>
+        <option value="3">3</option>
+        <option value="12">12</option>
+      </select>
       </td>
     </tr>
     <tr>
@@ -194,7 +211,14 @@ const controlPanel = `<table>
         <a id="DownloadSTL">Download STL File</a>
       </td>
       <td>
-        <a id="DownloadVTK">Download VTK File</a>
+        <a id="DownloadVTP">Download VTP File</a>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <div id=ProgressBar class=progress-bar>
+          <div class=progress-bar-value></div>
+        </div>
       </td>
     </tr>
 </table>
@@ -214,6 +238,9 @@ representationSelector.addEventListener('change', (e) => {
 
 const btnCreate = document.getElementById('Create');
 
+// prevent resending same request to server
+global.crntParameters = [0,0,0,0,0];
+
 btnCreate.addEventListener('click', () => {
   const ns = document.getElementById('ns').value;
   const nr = document.getElementById('nr').value;
@@ -221,21 +248,36 @@ btnCreate.addEventListener('click', () => {
   const h = document.getElementById('h').value;
   const w = document.getElementById('w').value;
 
+  
+
+  if ( ns === global.crntParameters[0] 
+    && nr === global.crntParameters[1]
+    && d  === global.crntParameters[2]
+    && h  === global.crntParameters[3]
+    && w  === global.crntParameters[4])
+    return;
+
+  global.crntParameters = [ns, nr, d, h, w];
+
   const server_url = `http://192.168.4.23:3000/index.js?ns=${ns}&nr=${nr}&d=${d}&h=${h}&w=${w}`;
 
   console.log('-- Starting API Call ----------------------');
   console.log('server_url: ', server_url);
+  
+  const pgBar = document.getElementById('ProgressBar');
+  pgBar.hidden = false;
 
-  reader.setUrl(server_url).then(() => {
-    reader.loadData().then(() => {
+  vtpReader.setUrl(server_url).then(() => {
+    vtpReader.loadData().then(() => {
       console.log('processing server response...');
 
       // PolyData from reader is already flowing through the pipeline
       // that has been connected previously. Getting polydata here for 
       // color to scalar mapping and rendering
-      let polyData = reader.getOutputData();
+      let polyData = vtpReader.getOutputData();
       let pointData = polyData.getPointData();
   
+      /*
       // Copy scalar data into color array
       // - vtk.js color rendering by scalar only works for Int32Array
       let pts = polyData.getPoints();
@@ -256,11 +298,14 @@ btnCreate.addEventListener('click', () => {
           values: clr,
         })
       )
+      */
 
       let range = pointData.getArrayByName('Label').getRange();
       polyMapper.setScalarRange(range[0], range[1]);
   
       console.log('color scalars created');
+
+      
 
       // Add stl file for download
       const linkSTLDownload = document.getElementById('DownloadSTL');
@@ -276,14 +321,14 @@ btnCreate.addEventListener('click', () => {
 
       linkSTLDownload.download = 'Ovary.stl';
 
-      console.log('stl download link created')
+      console.log('stl download link created');
+      
 
       // Add vtk file for download
-      const linkVTKDownload = document.getElementById('DownloadVTK');
+      const linkMeshDownload = document.getElementById('DownloadVTP');
 
-      console.log('inner server url', server_url);
-      linkVTKDownload.href = server_url;
-      linkVTKDownload.download = 'Ovary.vtk';
+      linkMeshDownload.href = server_url;
+      linkMeshDownload.download = 'Ovary.vtp';
 
   
       // --Debug: export local variable to global scope
@@ -296,6 +341,9 @@ btnCreate.addEventListener('click', () => {
       renderWindow.render();
 
       console.log('-- End of Processing API response ---------');
+
+      // Hide the progress bar
+      pgBar.hidden = true;
     });
   });
 });
@@ -305,4 +353,3 @@ global.reader = reader;
 global.renderer = renderer;
 global.polyMapper = polyMapper;
 global.renderWindow = renderWindow;
-global.smoothFilter = smoothFilter;
