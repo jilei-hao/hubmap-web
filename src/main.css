@@ -9,7 +9,7 @@ label {
 
 .progress-bar {
   height: 4px;
-  background-color: rgba(5, 114, 206, 0.2);
+  background-color: white(255, 255, 255, 0.2);
   margin-top: 2px;
   width: 100%;
   overflow: hidden;

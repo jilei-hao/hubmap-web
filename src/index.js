@@ -63,34 +63,107 @@ function createLine(p1, p2) {
   return { lineSource, mapper, actor };
 }
 
-// set axes start and end points
-const a = 30;
-const pSuperior = [0, a, 0];
-const pInferior = [0, -a, 0];
-const pLateral = [0, 0, -a];
-const pMedial = [0, 0, a];
-const pAnterior = [-a, 0, 0];
-const pPosterior = [a, 0, 0];
+// Set the lengths of an axis
+// Inputs:
+//    axisInd: the index in the axes array of the axis
+//    len: the length to be set
+function getAxisPos(axisInd, len) {
+  /*
+    - Axes on screen and in the app are identified by index 0, 1, 2
+      in the Axes array
+    - Axis 0 represents the longest axis in the ovary model 
+        - Start: UOL (Utero-ovarian Ligament) [-len/2, 0, 0]
+        - End: IL (Infundibulopelvic Ligament) [len/2, 0, 0]
+    - Axis 1 represents the 45 degree axis pointing from inferior-posterior to 
+      superior-anterior
+        - Start: ANTI-MES (Anti-Mesenteric) [0, -len/2.828), -len/2.828]
+        - End: MES (Mensenteric) [0, len/2.828, len/2.828]
+    - Axis 2 represents the 45 degree axis pointing from inferior-anterior to 
+      superior-posterior
+        - Start: SUP (Superior) [len/2.828, 0, -len/2.828]
+        - End: INF (Inferior) [-len/2.828, 0, len/2.828]
+  */
 
-// Create an array of 3 axes
-const axes = [
-  createLine(pInferior, pSuperior),
-  createLine(pLateral, pMedial),
-  createLine(pAnterior, pPosterior)
-];
+  console.assert(axisInd >= 0 && axisInd < 3);
+
+  let p1 = [0, 0, 0];
+  let p2 = [0, 0, 0];
+
+  if (axisInd == 0) {
+    p1 = [-len/2, 0, 0];
+    p2 = [len/2, 0, 0];
+  } else if (axisInd == 1) {
+    p1 = [0, -len/2.828, -len/2.828];
+    p2 = [0, len/2.828, len/2.828];
+  } else { // axisInd == 2
+    p1 = [len/2.828, 0, -len/2.828];
+    p2 = [-len/2.828, 0, len/2.828];
+  }
+  
+  return [p1, p2];
+}
+
+function createLabelDesc (shortDesc, fullDesc) {
+  return { short: shortDesc, full: fullDesc };
+}
 
 // Create orientation text
-function createLabel(text, position) {
+function createLabel(desc, position) {
   const widget = vtkLabelWidget.newInstance();
   widget.setInteractor(renderWindow.getInteractor());
   widget.setEnabled(1);
   widget.setDragable(false);
-  widget.getWidgetRep().setLabelText(text);
+  widget.getWidgetRep().setLabelText(desc.short);
   widget.getWidgetRep().setWorldPosition(position);
 
   return widget;
 }
 
+function configureAxes(len0, len1, len2) {
+  // if axes don't exist, create first
+  if (axes.length < 3) {
+    console.log('Creating new axes...');
+    axes[0] = createLine([0,0,0], [1,1,1]);
+    axes[1] = createLine([0,0,0], [1,1,1]);
+    axes[2] = createLine([0,0,0], [1,1,1]);
+  }
+
+  let pos = [
+    getAxisPos(0, len0),
+    getAxisPos(1, len1),
+    getAxisPos(2, len2)
+  ];
+
+  // assemble lines and labels to axes
+  for (let i = 0; i < 3; ++i) {
+    axes[i] = {
+      Line: createLine(pos[i][0], pos[i][1]),
+      StartLabel: createLabel(AxesLabels[i][0], pos[i][0]),
+      EndLabel: createLabel(AxesLabels[i][1], pos[i][1])
+    }
+  }
+}
+
+const axes = [];
+
+const AxesLabels = [
+  [
+    createLabelDesc('UOL', 'Utero-Ovarian Ligament'), 
+    createLabelDesc('IL', 'Infundibulopelvic Ligament')
+  ], 
+  [
+    createLabelDesc('ANTI-MES', 'Anti-Mesenteric'), 
+    createLabelDesc('MES', 'Mensenteric')
+  ],
+  [
+    createLabelDesc('INF', 'Inferior'), 
+    createLabelDesc('SUP', 'Superior')
+  ]
+];
+
+
+
+/*
 const lblS = createLabel('S', pSuperior);
 const lblI = createLabel('I', pInferior);
 const lblL = createLabel('L', pLateral);
@@ -99,6 +172,7 @@ const lblA = createLabel('A', pAnterior);
 const lblP = createLabel('P', pPosterior);
 
 global.lblS = lblS;
+*/
 
 
 
@@ -126,6 +200,10 @@ polyMapper.setInputConnection(vtpReader.getOutputPort());
 polyActor.setMapper(polyMapper);
 renderer.addActor(polyActor);
 renderer.resetCamera();
+
+// Move camera to display long axis horizontally
+renderer.getActiveCamera().setPosition(1,0,0);
+
 
 // render default mesh when opening page
 window.addEventListener('load', () => {
@@ -208,16 +286,16 @@ const controlPanel = `<table>
     <tr>
       <td>
         <button id="Create">Create</button>
-        <a id="DownloadSTL">Download STL File</a>
+        <a id="DownloadSTL">Download STL</a>
       </td>
       <td>
-        <a id="DownloadVTP">Download VTP File</a>
+        <a id="DownloadVTP">Download VTP</a>
       </td>
     </tr>
     <tr>
       <td>
         <div id=ProgressBar class=progress-bar>
-          <div class=progress-bar-value></div>
+          <div id=ProgressBarFiller class=progress-bar-value></div>
         </div>
       </td>
     </tr>
@@ -264,53 +342,29 @@ btnCreate.addEventListener('click', () => {
   console.log('-- Starting API Call ----------------------');
   console.log('server_url: ', server_url);
   
-  const pgBar = document.getElementById('ProgressBar');
+  const pgBar = document.getElementById('ProgressBarFiller');
   pgBar.hidden = false;
+
+  // create axes based on the sizes
+  configureAxes(1.5 * w, 1.5 * h, 1.5 * d);
 
   vtpReader.setUrl(server_url).then(() => {
     vtpReader.loadData().then(() => {
-      console.log('processing server response...');
+      console.log('Reponse received. Processing...');
 
       // PolyData from reader is already flowing through the pipeline
       // that has been connected previously. Getting polydata here for 
-      // color to scalar mapping and rendering
+      // color related logic
+
       let polyData = vtpReader.getOutputData();
       let pointData = polyData.getPointData();
-  
-      /*
-      // Copy scalar data into color array
-      // - vtk.js color rendering by scalar only works for Int32Array
-      let pts = polyData.getPoints();
-      const clr = new Int32Array(pts.getNumberOfPoints());
-      const orig = pointData.getArrayByName('Label').getData();
-
-      let switcher = 1;
-      for (let i = 0; i < clr.length; ++i) {
-        clr[i] = orig[i];
-      }
-
-      pointData.removeArray('Label');
-
-      pointData.setScalars(
-        vtkDataArray.newInstance({
-          name: 'Label',
-          numberOfComponents: 1,
-          values: clr,
-        })
-      )
-      */
-
       let range = pointData.getArrayByName('Label').getRange();
       polyMapper.setScalarRange(range[0], range[1]);
-  
-      console.log('color scalars created');
-
-      
 
       // Add stl file for download
       const linkSTLDownload = document.getElementById('DownloadSTL');
       const fileContent = vtkSTLWriter.writeSTL(polyData);
-      
+
       const stlBlob = new Blob([fileContent], {
         type: 'application/octet-stream',
       });
@@ -323,8 +377,7 @@ btnCreate.addEventListener('click', () => {
 
       console.log('stl download link created');
       
-
-      // Add vtk file for download
+      // Add vtp file for download
       const linkMeshDownload = document.getElementById('DownloadVTP');
 
       linkMeshDownload.href = server_url;
