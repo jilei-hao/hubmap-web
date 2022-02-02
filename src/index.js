@@ -72,8 +72,8 @@ function getAxisPos(axisInd, len) {
     - Axes on screen and in the app are identified by index 0, 1, 2
       in the Axes array
     - Axis 0 represents the longest axis in the ovary model 
-        - Start: UOL (Utero-ovarian Ligament) [-len/2, 0, 0]
-        - End: IL (Infundibulopelvic Ligament) [len/2, 0, 0]
+        - Start: UOL (Utero-ovarian Ligament) [0, -len/2, 0]
+        - End: IL (Infundibulopelvic Ligament) [0, -len/2, 0]
     - Axis 1 represents the 45 degree axis pointing from inferior-posterior to 
       superior-anterior
         - Start: ANTI-MES (Anti-Mesenteric) [0, -len/2.828), -len/2.828]
@@ -90,14 +90,14 @@ function getAxisPos(axisInd, len) {
   let p2 = [0, 0, 0];
 
   if (axisInd == 0) {
-    p1 = [-len/2, 0, 0];
-    p2 = [len/2, 0, 0];
+    p1 = [0, 0, -len/2];
+    p2 = [0, 0, len/2];
   } else if (axisInd == 1) {
-    p1 = [0, -len/2.828, -len/2.828];
-    p2 = [0, len/2.828, len/2.828];
+    p1 = [len/2.828, -len/2.828, 0];
+    p2 = [-len/2.828, len/2.828, 0];
   } else { // axisInd == 2
-    p1 = [len/2.828, 0, -len/2.828];
-    p2 = [-len/2.828, 0, len/2.828];
+    p1 = [-len/2.828, -len/2.828, 0];
+    p2 = [len/2.828, len/2.828, 0 ];
   }
   
   return [p1, p2];
@@ -119,32 +119,40 @@ function createLabel(desc, position) {
   return widget;
 }
 
-function configureAxes(len0, len1, len2) {
-  // if axes don't exist, create first
-  if (axes.length < 3) {
-    console.log('Creating new axes...');
-    axes[0] = createLine([0,0,0], [1,1,1]);
-    axes[1] = createLine([0,0,0], [1,1,1]);
-    axes[2] = createLine([0,0,0], [1,1,1]);
-  }
+function configureAxes(l, h, d) {
+  const l45 = Math.max(h, d);
 
   let pos = [
-    getAxisPos(0, len0),
-    getAxisPos(1, len1),
-    getAxisPos(2, len2)
+    getAxisPos(0, l),
+    getAxisPos(1, l45),
+    getAxisPos(2, l45)
   ];
 
-  // assemble lines and labels to axes
-  for (let i = 0; i < 3; ++i) {
-    axes[i] = {
-      Line: createLine(pos[i][0], pos[i][1]),
-      StartLabel: createLabel(AxesLabels[i][0], pos[i][0]),
-      EndLabel: createLabel(AxesLabels[i][1], pos[i][1])
+  // if axes don't exist, create them
+  if (axes.length < 3) {
+    for (let i = 0; i < 3; ++i) {
+      axes[i] = {
+        Line: createLine(pos[i][0], pos[i][1]),
+        StartLabel: createLabel(AxesLabels[i][0], pos[i][0]),
+        EndLabel: createLabel(AxesLabels[i][1], pos[i][1])
+      }
+    }
+  } else {
+    for (let i = 0; i < 3; ++i) {
+      axes[i].Line.lineSource.setPoint1(pos[i][0]);
+      axes[i].Line.lineSource.setPoint2(pos[i][1]);
+      axes[i].StartLabel.getWidgetRep().setWorldPosition(pos[i][0]);
+      axes[i].EndLabel.getWidgetRep().setWorldPosition(pos[i][1]);
     }
   }
+
+  
+  // assemble lines and labels to axes
+  
 }
 
 const axes = [];
+global.axes = axes;
 
 const AxesLabels = [
   [
@@ -160,20 +168,6 @@ const AxesLabels = [
     createLabelDesc('SUP', 'Superior')
   ]
 ];
-
-
-
-/*
-const lblS = createLabel('S', pSuperior);
-const lblI = createLabel('I', pInferior);
-const lblL = createLabel('L', pLateral);
-const lblM = createLabel('M', pMedial);
-const lblA = createLabel('A', pAnterior);
-const lblP = createLabel('P', pPosterior);
-
-global.lblS = lblS;
-*/
-
 
 
 // ----------------------------------------------------------------------------
@@ -202,7 +196,7 @@ renderer.addActor(polyActor);
 renderer.resetCamera();
 
 // Move camera to display long axis horizontally
-renderer.getActiveCamera().setPosition(1,0,0);
+renderer.getActiveCamera().setPosition(-1,0,0);
 
 
 // render default mesh when opening page
