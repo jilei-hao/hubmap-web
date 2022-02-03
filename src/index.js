@@ -265,8 +265,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Number of Sagittal Slices
-        </label>
+        <label> Number of Long-Axis Slices</label>
       </td>
       <td>
       <select id="ns" style="width: 100%">
@@ -278,8 +277,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Number of Circumferential Slices
-        </label>
+        <label> Number of Circumferential Slices</label>
       </td>
       <td>
       <select id="nr" style="width: 100%">
@@ -291,8 +289,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Anterior-Posterior Distance (mm)
-        </label>
+        <label>Thickness (mm)</label>
       </td>
       <td>
         <input type="text" id="d" value=20>
@@ -300,7 +297,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label>Superior-Inferior Distance (mm)</label>
+        <label>Height (mm)</label>
       </td>
       <td>
         <input type="text" id="h" value=30>
@@ -308,7 +305,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Medial-Lateral Distance (mm)</label>
+        <label>Long-Axis Length (mm)</label>
       </td>
       <td>
         <input type="text" id="w" value=40>
