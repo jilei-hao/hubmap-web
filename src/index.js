@@ -22,6 +22,7 @@ import vtkLineSource from '@kitware/vtk.js/Filters/Sources/LineSource';
 import vtkWindowedSincPolyDataFilter from '@kitware/vtk.js/Filters/General/WindowedSincPolyDataFilter'
 import vtkHttpDataSetReader from '@kitware/vtk.js/IO/Core/HttpDataSetReader';
 import vtkXMLPolyDataReader from '@kitware/vtk.js/IO/XML/XMLPolyDataReader';
+import vtkPlaneSource from '@kitware/vtk.js/Filters/Sources/PlaneSource';
 
 // Force DataAccessHelper to have access to various data source
 import '@kitware/vtk.js/IO/Core/DataAccessHelper/HtmlDataAccessHelper';
@@ -29,6 +30,7 @@ import '@kitware/vtk.js/IO/Core/DataAccessHelper/HttpDataAccessHelper';
 import '@kitware/vtk.js/IO/Core/DataAccessHelper/JSZipDataAccessHelper';
 
 import { Representation } from '@kitware/vtk.js/Rendering/Core/Property/Constants';
+import { P } from '@kitware/vtk.js/Common/Core/Math/index';
 
 // ----------------------------------------------------------------------------
 // Standard rendering code setup
@@ -145,10 +147,6 @@ function configureAxes(l, h, d) {
       axes[i].EndLabel.getWidgetRep().setWorldPosition(pos[i][1]);
     }
   }
-
-  
-  // assemble lines and labels to axes
-  
 }
 
 const axes = [];
@@ -168,6 +166,49 @@ const AxesLabels = [
     createLabelDesc('SUP', 'Superior')
   ]
 ];
+
+// ----------------------------------------------------------------------------
+// Mesovarium Plane Logic
+// ----------------------------------------------------------------------------
+function createPlane() {
+  const planeSource = vtkPlaneSource.newInstance();
+  const mapper = vtkMapper.newInstance();
+  const actor = vtkActor.newInstance();
+  
+  actor.getProperty().setRepresentation(Representation.SURFACE);
+  
+  mapper.setInputConnection(planeSource.getOutputPort());
+  actor.setMapper(mapper);
+  
+  renderer.addActor(actor);
+
+  return { planeSource, mapper, actor };
+}
+
+function configurePlaneShape(plane, orig, p1, p2) {
+  let ps = plane.planeSource;
+  ps.setOrigin(orig);
+  ps.setPoint1(p1);
+  ps.setPoint2(p2);
+}
+
+function configureMesoPlane(w, h, d) {
+  const maxdh = Math.max(d, h);
+  const outEdge = 0.7 * 0.5 * maxdh;
+  const mesoPos = [
+    [0, 0, -0.5 * w],
+    [-outEdge, outEdge, -0.5 * w],
+    [0, 0, 0.5 * w]
+  ];
+
+  configurePlaneShape(mesoPlane, mesoPos[0], mesoPos[1] ,mesoPos[2]);
+}
+
+
+const mesoPlane = createPlane();
+mesoPlane.actor.getProperty().setColor(180, 180, 180);
+mesoPlane.actor.getProperty().setOpacity(0.5);
+global.mesoPlane = mesoPlane;
 
 
 // ----------------------------------------------------------------------------
@@ -259,9 +300,7 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Superior-Inferior Distance (mm)
-          
-        </label>
+        <label>Superior-Inferior Distance (mm)</label>
       </td>
       <td>
         <input type="text" id="h" value=30>
@@ -269,12 +308,18 @@ const controlPanel = `<table>
     </tr>
     <tr>
       <td>
-        <label> Medial-Lateral Distance (mm)
-          
-        </label>
+        <label> Medial-Lateral Distance (mm)</label>
       </td>
       <td>
         <input type="text" id="w" value=40>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <label for=ShowMeso>Display Mesovarium Plane</label>
+      </td>
+      <td>
+        <input type=checkbox id=ShowMeso checked>
       </td>
     </tr>
     <tr>
@@ -307,6 +352,13 @@ representationSelector.addEventListener('change', (e) => {
   polyActor.getProperty().setRepresentation(newRepValue);
   renderWindow.render();
 });
+
+const showMesoBox = document.getElementById('ShowMeso');
+
+showMesoBox.addEventListener('change', (e) => {
+  mesoPlane.actor.setVisibility(e.target.checked);
+  renderWindow.render();
+})
 
 const btnCreate = document.getElementById('Create');
 
@@ -341,6 +393,9 @@ btnCreate.addEventListener('click', () => {
 
   // create axes based on the sizes
   configureAxes(1.5 * w, 1.5 * h, 1.5 * d);
+
+  // create mesoPlane
+  configureMesoPlane(w, h, d)
 
   vtpReader.setUrl(server_url).then(() => {
     vtpReader.loadData().then(() => {
