@@ -154,16 +154,16 @@ global.axes = axes;
 
 const AxesLabels = [
   [
-    createLabelDesc('UOL', 'Utero-Ovarian Ligament'), 
-    createLabelDesc('IL', 'Infundibulopelvic Ligament')
+    createLabelDesc('Utero-Ovarian\n Ligament', 'Utero-Ovarian Ligament'), 
+    createLabelDesc('Infundibulopelvic Ligament', 'Infundibulopelvic Ligament')
   ], 
   [
-    createLabelDesc('ANTI-MES', 'Anti-Mesenteric'), 
-    createLabelDesc('MES', 'Mensenteric')
+    createLabelDesc('Anti-Mesenteric', 'Anti-Mesenteric'), 
+    createLabelDesc('Mensenteric', 'Mensenteric')
   ],
   [
-    createLabelDesc('INF', 'Inferior'), 
-    createLabelDesc('SUP', 'Superior')
+    createLabelDesc('Inferior', 'Inferior'), 
+    createLabelDesc('Superior', 'Superior')
   ]
 ];
 
@@ -380,7 +380,7 @@ btnCreate.addEventListener('click', () => {
 
   global.crntParameters = [ns, nr, d, h, w];
 
-  const server_url = `http://192.168.4.23:3000/index.js?ns=${ns}&nr=${nr}&d=${d}&h=${h}&w=${w}`;
+  const server_url = `http://localhost:3000/index.js?ns=${ns}&nr=${nr}&d=${d}&h=${h}&w=${w}`;
 
   console.log('-- Starting API Call ----------------------');
   console.log('server_url: ', server_url);
