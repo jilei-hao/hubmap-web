@@ -8,20 +8,23 @@
 
 import './main.css'
 
-import '@kitware/vtk.js/Rendering/Profiles/Geometry';
+import '@kitware/vtk.js/Rendering/Profiles/All';
 
-import vtkPolyDataReader from '@kitware/vtk.js/IO/Legacy/PolyDataReader';
+//import vtkPolyDataReader from '@kitware/vtk.js/IO/Legacy/PolyDataReader';
 import vtkFullScreenRenderWindow from '@kitware/vtk.js/Rendering/Misc/FullScreenRenderWindow';
-import vtkLabelWidget from '@kitware/vtk.js/Interaction/Widgets/LabelWidget';
-import TextAlign from '@kitware/vtk.js/Interaction/Widgets/LabelRepresentation/Constants';
+
+import vtkHttpSceneLoader from '@kitware/vtk.js/IO/Core/HttpSceneLoader';
+import vtkHttpDataAccessHelper from '@kitware/vtk.js/IO/Core/DataAccessHelper/HttpDataAccessHelper';
+import vtkDataAccessHelper from '@kitware/vtk.js/IO/Core/DataAccessHelper';
+
+
+import vtkLabelWidget from '@kitware/vtk.js/Widgets/Widgets3D/LabelWidget';
+//import vtkWidgetManager from '@kitware/vtk.js/Widgets/Core/WidgetManager';
 import vtkActor from '@kitware/vtk.js/Rendering/Core/Actor';
 import vtkMapper from '@kitware/vtk.js/Rendering/Core/Mapper';
-import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
-import vtkSTLWriter from '@kitware/vtk.js/IO/Geometry/STLWriter';
+//import vtkSTLWriter from '@kitware/vtk.js/IO/Geometry/STLWriter';
 import vtkLineSource from '@kitware/vtk.js/Filters/Sources/LineSource';
-import vtkWindowedSincPolyDataFilter from '@kitware/vtk.js/Filters/General/WindowedSincPolyDataFilter'
-import vtkHttpDataSetReader from '@kitware/vtk.js/IO/Core/HttpDataSetReader';
-import vtkXMLPolyDataReader from '@kitware/vtk.js/IO/XML/XMLPolyDataReader';
+//import vtkXMLPolyDataReader from '@kitware/vtk.js/IO/XML/XMLPolyDataReader';
 import vtkPlaneSource from '@kitware/vtk.js/Filters/Sources/PlaneSource';
 
 // Force DataAccessHelper to have access to various data source
@@ -30,7 +33,7 @@ import '@kitware/vtk.js/IO/Core/DataAccessHelper/HttpDataAccessHelper';
 import '@kitware/vtk.js/IO/Core/DataAccessHelper/JSZipDataAccessHelper';
 
 import { Representation } from '@kitware/vtk.js/Rendering/Core/Property/Constants';
-import { P } from '@kitware/vtk.js/Common/Core/Math/index';
+import vtkWidgetManager from '@kitware/vtk.js/Widgets/Core/WidgetManager';
 
 // ----------------------------------------------------------------------------
 // Standard rendering code setup
@@ -39,8 +42,11 @@ import { P } from '@kitware/vtk.js/Common/Core/Math/index';
 const fullScreenRenderer = vtkFullScreenRenderWindow.newInstance();
 const renderer = fullScreenRenderer.getRenderer();
 const renderWindow = fullScreenRenderer.getRenderWindow();
-const polyMapper = vtkMapper.newInstance();
-const polyActor = vtkActor.newInstance();
+
+const widgetManager = vtkWidgetManager.newInstance();
+widgetManager.setRenderer(renderer);
+widgetManager.disablePicking();
+global.widgetManager = widgetManager;
 
 // ----------------------------------------------------------------------------
 // Create Axes
@@ -53,8 +59,7 @@ function createLine(p1, p2) {
 
   actor.setMapper(mapper);
   actor.getProperty().setEdgeVisibility(true);
-  actor.getProperty().setEdgeColor(1, 0, 0);
-  actor.getProperty().setRepresentation(Representation.SURFACE);
+  actor.getProperty().setEdgeColor(0, 0, 0);
 
   lineSource.setPoint1(p1);
   lineSource.setPoint2(p2);
@@ -73,17 +78,17 @@ function getAxisPos(axisInd, len) {
   /*
     - Axes on screen and in the app are identified by index 0, 1, 2
       in the Axes array
-    - Axis 0 represents the longest axis in the ovary model 
-        - Start: UOL (Utero-ovarian Ligament) [0, -len/2, 0]
-        - End: IL (Infundibulopelvic Ligament) [0, -len/2, 0]
+    - Axis 0 represents the 45 degree axis pointing from inferior-anterior to 
+      superior-posterior
+        - Start: SUP (Superior) [len/2.828, 0, -len/2.828]
+        - End: INF (Inferior) [-len/2.828, 0, len/2.828]
     - Axis 1 represents the 45 degree axis pointing from inferior-posterior to 
       superior-anterior
         - Start: ANTI-MES (Anti-Mesenteric) [0, -len/2.828), -len/2.828]
         - End: MES (Mensenteric) [0, len/2.828, len/2.828]
-    - Axis 2 represents the 45 degree axis pointing from inferior-anterior to 
-      superior-posterior
-        - Start: SUP (Superior) [len/2.828, 0, -len/2.828]
-        - End: INF (Inferior) [-len/2.828, 0, len/2.828]
+    - Axis 2 represents the longest axis in the ovary model 
+        - Start: UOL (Utero-ovarian Ligament) [0, -len/2, 0]
+        - End: IL (Infundibulopelvic Ligament) [0, -len/2, 0]
   */
 
   console.assert(axisInd >= 0 && axisInd < 3);
@@ -92,16 +97,16 @@ function getAxisPos(axisInd, len) {
   let p2 = [0, 0, 0];
 
   if (axisInd == 0) {
-    p1 = [0, 0, -len/2];
-    p2 = [0, 0, len/2];
+    p1 = [-len/2.828, -len/2.828, 0];
+    p2 = [len/2.828, len/2.828, 0 ];
   } else if (axisInd == 1) {
     p1 = [len/2.828, -len/2.828, 0];
     p2 = [-len/2.828, len/2.828, 0];
   } else { // axisInd == 2
-    p1 = [-len/2.828, -len/2.828, 0];
-    p2 = [len/2.828, len/2.828, 0 ];
+    p1 = [0, 0, -len/1.7];
+    p2 = [0, 0, len/1.7];
   }
-  
+
   return [p1, p2];
 }
 
@@ -111,46 +116,49 @@ function createLabelDesc (shortDesc, fullDesc) {
 
 // Create orientation text
 function createLabel(desc, position) {
-  const widget = vtkLabelWidget.newInstance();
-  widget.setInteractor(renderWindow.getInteractor());
-  widget.setEnabled(1);
-  widget.setDragable(false);
-  widget.getWidgetRep().setLabelText(desc.short);
-  widget.getWidgetRep().setWorldPosition(position);
+  const wdgLabel = vtkLabelWidget.newInstance();
+  const handle = widgetManager.addWidget(wdgLabel);
+  widgetManager.releaseFocus(wdgLabel);
+  global.handles.push(handle);
+  global.labels.push(wdgLabel);
 
-  return widget;
+  //console.log(handle);
+  //handle.setInteractor(renderWindow.getInteractor());
+  //handle.setEnabled(true);
+  //handle.setHandleVisibility(true);
+  //handle.setText(desc.short);
+  //handle.setDragable(false);
+  //handle.setCoordinateSystemToWorld();
+
+  //global.handles.push(widget);
+  
+  //handle.setWorldPosition(position);
+
+  return wdgLabel;
 }
 
-function configureAxes(l, h, d) {
-  const l45 = Math.max(h, d);
-
+function createAxes(w, h, d) {
+  const l45 = Math.max(h, d) * 1.25;
   let pos = [
-    getAxisPos(0, l),
+    getAxisPos(0, l45), 
     getAxisPos(1, l45),
-    getAxisPos(2, l45)
+    getAxisPos(2, w)
   ];
 
+  let axes = [];
+  let actors = [];
+
   // if axes don't exist, create them
-  if (axes.length < 3) {
-    for (let i = 0; i < 3; ++i) {
-      axes[i] = {
-        Line: createLine(pos[i][0], pos[i][1]),
-        StartLabel: createLabel(AxesLabels[i][0], pos[i][0]),
-        EndLabel: createLabel(AxesLabels[i][1], pos[i][1])
-      }
-    }
-  } else {
-    for (let i = 0; i < 3; ++i) {
-      axes[i].Line.lineSource.setPoint1(pos[i][0]);
-      axes[i].Line.lineSource.setPoint2(pos[i][1]);
-      axes[i].StartLabel.getWidgetRep().setWorldPosition(pos[i][0]);
-      axes[i].EndLabel.getWidgetRep().setWorldPosition(pos[i][1]);
+  for (let i = 0; i < 3; ++i) {
+    axes[i] = {
+      Line: createLine(pos[i][0], pos[i][1]),
+      StartLabel: createLabel(AxesLabels[i][0], pos[i][0]),
+      EndLabel: createLabel(AxesLabels[i][1], pos[i][1])
     }
   }
-}
 
-const axes = [];
-global.axes = axes;
+  return actors;
+}
 
 const AxesLabels = [
   [
@@ -170,74 +178,41 @@ const AxesLabels = [
 // ----------------------------------------------------------------------------
 // Mesovarium Plane Logic
 // ----------------------------------------------------------------------------
-function createPlane() {
-  const planeSource = vtkPlaneSource.newInstance();
-  const mapper = vtkMapper.newInstance();
-  const actor = vtkActor.newInstance();
-  
-  actor.getProperty().setRepresentation(Representation.SURFACE);
-  
-  mapper.setInputConnection(planeSource.getOutputPort());
-  actor.setMapper(mapper);
-  
-  renderer.addActor(actor);
-
-  return { planeSource, mapper, actor };
-}
-
-function configurePlaneShape(plane, orig, p1, p2) {
-  let ps = plane.planeSource;
-  ps.setOrigin(orig);
-  ps.setPoint1(p1);
-  ps.setPoint2(p2);
-}
-
-function configureMesoPlane(w, h, d) {
+function createPlane(w, h, d) {
   const maxdh = Math.max(d, h);
   const outEdge = 0.7 * 0.5 * maxdh;
-  const mesoPos = [
-    [0, 0, -0.5 * w],
-    [-outEdge, outEdge, -0.5 * w],
-    [0, 0, 0.5 * w]
+  const pos = [
+    [0, 0, -0.5 * w], // origin
+    [-outEdge, outEdge, -0.5 * w], //p1
+    [0, 0, 0.5 * w] // p2
   ];
 
-  configurePlaneShape(mesoPlane, mesoPos[0], mesoPos[1] ,mesoPos[2]);
+  const ps = vtkPlaneSource.newInstance();
+  ps.setOrigin(pos[0]);
+  ps.setPoint1(pos[1]);
+  ps.setPoint2(pos[2]);
+
+  // Mapper
+  const mapper = vtkMapper.newInstance();
+  const actor = vtkActor.newInstance();
+
+  // Configure plane apperance
+  actor.getProperty().setColor(180, 180, 180);
+  actor.getProperty().setOpacity(0.5);  
+  actor.getProperty().setRepresentation(Representation.SURFACE);
+
+  mapper.setInputConnection(ps.getOutputPort());
+  actor.setMapper(mapper);
+  renderer.addActor(actor);
+
+  return actor;
 }
 
-
-const mesoPlane = createPlane();
-mesoPlane.actor.getProperty().setColor(180, 180, 180);
-mesoPlane.actor.getProperty().setOpacity(0.5);
-global.mesoPlane = mesoPlane;
-
-
-// ----------------------------------------------------------------------------
-// Get input from the server
-// ----------------------------------------------------------------------------
-const reader = vtkPolyDataReader.newInstance();
-const vtpReader = vtkXMLPolyDataReader.newInstance();
-
-// url of the file server, should be in a configuration file
-//const server_url = 'http://192.168.4.23:3000/index.js?ns=2&nr=4&d=20&h=30&w=40';
-//const file_name = 'Ovary.vtk';
-
-// connect the rendering pipeline
-/*
-const smoothFilter = vtkWindowedSincPolyDataFilter.newInstance({
-  nonManifoldSmoothing: 0,
-  numberOfIterations: 20,
-  passBand: 0.001,
-});
-smoothFilter.setInputConnection(vtpReader.getOutputPort());
-*/
-
-polyMapper.setInputConnection(vtpReader.getOutputPort());
-polyActor.setMapper(polyMapper);
-renderer.addActor(polyActor);
-renderer.resetCamera();
-
-// Move camera to display long axis horizontally
-renderer.getActiveCamera().setPosition(-1,0,0);
+// initialize camera
+function initializeCamera(camera) {
+  camera.setPosition(-100, 0, 0);
+  camera.setFocalPoint(0, 0, 0);
+}
 
 
 // render default mesh when opening page
@@ -269,8 +244,8 @@ const controlPanel = `<table>
       </td>
       <td>
       <select id="ns" style="width: 100%">
-        <option value="1" selected>1</option>
-        <option value="3">3</option>
+        <option value="1">1</option>
+        <option value="3" selected>3</option>
         <option value="12">12</option>
       </select>
       </td>
@@ -292,7 +267,7 @@ const controlPanel = `<table>
         <label>Thickness (mm)</label>
       </td>
       <td>
-        <input type="text" id="d" value=20>
+        <input type="text" id="d" value=10>
       </td>
     </tr>
     <tr>
@@ -300,7 +275,7 @@ const controlPanel = `<table>
         <label>Height (mm)</label>
       </td>
       <td>
-        <input type="text" id="h" value=30>
+        <input type="text" id="h" value=20>
       </td>
     </tr>
     <tr>
@@ -308,7 +283,7 @@ const controlPanel = `<table>
         <label>Long-Axis Length (mm)</label>
       </td>
       <td>
-        <input type="text" id="w" value=40>
+        <input type="text" id="w" value=35>
       </td>
     </tr>
     <tr>
@@ -353,7 +328,7 @@ representationSelector.addEventListener('change', (e) => {
 const showMesoBox = document.getElementById('ShowMeso');
 
 showMesoBox.addEventListener('change', (e) => {
-  mesoPlane.actor.setVisibility(e.target.checked);
+  global.mpActor.setVisibility(e.target.checked);
   renderWindow.render();
 })
 
@@ -368,8 +343,6 @@ btnCreate.addEventListener('click', () => {
   const d = document.getElementById('d').value;
   const h = document.getElementById('h').value;
   const w = document.getElementById('w').value;
-
-  
 
   if ( ns === global.crntParameters[0] 
     && nr === global.crntParameters[1]
@@ -388,67 +361,35 @@ btnCreate.addEventListener('click', () => {
   const pgBar = document.getElementById('ProgressBarFiller');
   pgBar.hidden = false;
 
-  // create axes based on the sizes
-  configureAxes(1.5 * w, 1.5 * h, 1.5 * d);
+  vtkHttpDataAccessHelper.fetchBinary(server_url, {
+  }).then((zipContent) => {
+    const dataAccessHelper = vtkDataAccessHelper.get('zip', {
+      zipContent,
+      callback: (zip) => {
+        renderer.removeAllActors(); // Remove actors previously loaded
 
-  // create mesoPlane
-  configureMesoPlane(w, h, d)
+        createPlane(w, h, d); // Create a meso plane
+        createAxes(w, h, d); // Create axes
 
-  vtpReader.setUrl(server_url).then(() => {
-    vtpReader.loadData().then(() => {
-      console.log('Reponse received. Processing...');
+        const sceneImporter = vtkHttpSceneLoader.newInstance({
+          renderer,
+          dataAccessHelper,
+        });
 
-      // PolyData from reader is already flowing through the pipeline
-      // that has been connected previously. Getting polydata here for 
-      // color related logic
+        sceneImporter.setUrl('index.json');
 
-      let polyData = vtpReader.getOutputData();
-      let pointData = polyData.getPointData();
-      let range = pointData.getArrayByName('Label').getRange();
-      polyMapper.setScalarRange(range[0], range[1]);
+        sceneImporter.onReady(() => {
+          initializeCamera(renderer.getActiveCamera());
+          renderWindow.render();
+        });
 
-      // Add stl file for download
-      const linkSTLDownload = document.getElementById('DownloadSTL');
-      const fileContent = vtkSTLWriter.writeSTL(polyData);
-
-      const stlBlob = new Blob([fileContent], {
-        type: 'application/octet-stream',
-      });
-      
-      linkSTLDownload.href = window.URL.createObjectURL(stlBlob, {
-        type: 'application/octet-stream',
-      });
-
-      linkSTLDownload.download = 'Ovary.stl';
-
-      console.log('stl download link created');
-      
-      // Add vtp file for download
-      const linkMeshDownload = document.getElementById('DownloadVTP');
-
-      linkMeshDownload.href = server_url;
-      linkMeshDownload.download = 'Ovary.vtp';
-
-  
-      // --Debug: export local variable to global scope
-      global.polyData = polyData;
-      global.pointData = pointData;
-  
-      
-      renderWindow.addRenderer(renderer);
-      renderer.resetCamera();
-      renderWindow.render();
-
-      console.log('-- End of Processing API response ---------');
-
-      // Hide the progress bar
-      pgBar.hidden = true;
+        pgBar.hidden = true;
+      },
     });
   });
 });
 
-
-global.reader = reader;
 global.renderer = renderer;
-global.polyMapper = polyMapper;
 global.renderWindow = renderWindow;
+global.labels = [];
+global.handles = [];
