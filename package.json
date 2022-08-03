@@ -15,7 +15,7 @@
   "author": "Jilei Hao",
   "license": "ISC",
   "dependencies": {
-    "@kitware/vtk.js": "^21.2.1"
+    "@kitware/vtk.js": "^25.6.0"
   },
   "devDependencies": {
     "css-loader": "^6.5.1",
